@@ -1,16 +1,31 @@
 buildscript {
     repositories {
         mavenCentral()
-        maven { url = "https://maven.minecraftforge.net/" }
-        maven { url = "https://files.minecraftforge.net/maven/" }
+
+        maven {
+            name = "forge"
+            url = "https://maven.minecraftforge.net/"
+        }
+
+        maven {
+            name = "sonatype"
+            url = "https://oss.sonatype.org/content/repositories/snapshots/"
+        }
+
+        maven {
+            name = "jitpack"
+            url = "https://jitpack.io"
+        }
     }
+
     dependencies {
-        classpath 'net.minecraftforge.gradle:ForgeGradle:1.2-SNAPSHOT'
+        classpath 'com.github.GTNewHorizons:ForgeGradle:1.2.11'
     }
 }
+
 apply plugin: 'forge'
 
-version = "0.1.0-gtnh"
+version = "0.3.0-gtnh"
 group = "com.mikuliku.touhoulittlemaidgtnh"
 archivesBaseName = "TouhouLittleMaid-GTNH"
 
@@ -24,6 +39,26 @@ minecraft {
 
 repositories {
     mavenCentral()
+
+    maven {
+        name = "forge"
+        url = "https://maven.minecraftforge.net/"
+    }
+
+    maven {
+        name = "sonatype"
+        url = "https://oss.sonatype.org/content/repositories/snapshots/"
+    }
+
+    maven {
+        name = "jitpack"
+        url = "https://jitpack.io"
+    }
+
+    maven {
+        name = "GTNH"
+        url = "https://nexus.gtnewhorizons.com/repository/public/"
+    }
 }
 
 dependencies {
@@ -32,10 +67,15 @@ dependencies {
 processResources {
     inputs.property "version", project.version
     inputs.property "mcversion", project.minecraft.version
+
     from(sourceSets.main.resources.srcDirs) {
         include '**/*.info'
-        expand 'version': project.version, 'mcversion': project.minecraft.version
+        expand(
+                'version': project.version,
+                'mcversion': project.minecraft.version
+        )
     }
+
     from(sourceSets.main.resources.srcDirs) {
         exclude '**/*.info'
     }
@@ -43,6 +83,8 @@ processResources {
 
 jar {
     manifest {
-        attributes 'FMLCorePluginContainsFMLMod': 'true'
+        attributes(
+                'FMLCorePluginContainsFMLMod': 'true'
+        )
     }
 }
