@@ -12,20 +12,29 @@ import net.minecraft.util.IChatComponent;
 import net.minecraft.world.World;
 
 public class EntityMaidJiuHu extends EntityTameable {
+
     private int chatCooldown;
 
     public EntityMaidJiuHu(World world) {
         super(world);
+
         this.setSize(0.6F, 1.5F);
         this.getNavigator().setAvoidsWater(true);
+
         this.tasks.addTask(0, new EntityAISwimming(this));
     }
 
     @Override
     protected void applyEntityAttributes() {
         super.applyEntityAttributes();
-        this.getEntityAttribute(SharedMonsterAttributes.maxHealth).setBaseValue(20.0D);
-        this.getEntityAttribute(SharedMonsterAttributes.movementSpeed).setBaseValue(0.30D);
+
+        this.getEntityAttribute(
+                SharedMonsterAttributes.maxHealth
+        ).setBaseValue(20.0D);
+
+        this.getEntityAttribute(
+                SharedMonsterAttributes.movementSpeed
+        ).setBaseValue(0.30D);
     }
 
     @Override
@@ -40,21 +49,56 @@ public class EntityMaidJiuHu extends EntityTameable {
 
     @Override
     public boolean interact(EntityPlayer player) {
-        if (!this.worldObj.isRemote && this.isTamed() && this.getOwner() == player) {
-            player.addChatMessage(new ChatComponentText("§d酒狐§f：主人，需要我做些什么吗？"));
+
+        if (!this.worldObj.isRemote
+                && this.isTamed()
+                && this.getOwner() == player) {
+
+            player.addChatMessage(
+                    new ChatComponentText(
+                            "§d酒狐§f：主人，需要我做些什么吗？"
+                    )
+            );
+
             return true;
         }
+
         return super.interact(player);
     }
 
+    /**
+     * 设置酒狐的主人。
+     *
+     * Minecraft 1.7.10 使用 UUID 字符串保存 EntityTameable 的主人。
+     */
     public void setOwnerPlayer(EntityPlayer player) {
+
         this.setTamed(true);
-        this.func_152115_b(player.getUniqueID().toString());
-        this.tasks.addTask(2, new EntityAIFollowOwner(this, 1.0D, 4.0F, 2.0F));
+
+        this.func_152115_b(
+                player.getUniqueID().toString()
+        );
+
+        this.tasks.addTask(
+                2,
+                new EntityAIFollowOwner(
+                        this,
+                        1.0D,
+                        4.0F,
+                        2.0F
+                )
+        );
     }
 
+    /**
+     * Minecraft 1.7.10 的实体聊天名称接口。
+     *
+     * 注意：
+     * 1.7.10 没有新版本中的 getDisplayName()。
+     * 对实体应该使用 func_145748_c_()。
+     */
     @Override
-    public IChatComponent getDisplayName() {
+    public IChatComponent func_145748_c_() {
         return new ChatComponentText("酒狐");
     }
 
@@ -65,8 +109,12 @@ public class EntityMaidJiuHu extends EntityTameable {
 
     @Override
     public void onLivingUpdate() {
+
         super.onLivingUpdate();
-        if (chatCooldown > 0) chatCooldown--;
+
+        if (chatCooldown > 0) {
+            chatCooldown--;
+        }
     }
 
     public boolean canChat() {
@@ -78,6 +126,10 @@ public class EntityMaidJiuHu extends EntityTameable {
     }
 
     public void askAI(EntityPlayer player, String message) {
-        MaidChatManager.request(this, player, message);
+        MaidChatManager.request(
+                this,
+                player,
+                message
+        );
     }
 }
