@@ -24,7 +24,6 @@ public class EntityMaidJiuHu extends EntityTameable {
         this.tasks.addTask(0, new EntityAISwimming(this));
     }
 
-    @Override
     protected void applyEntityAttributes() {
         super.applyEntityAttributes();
 
