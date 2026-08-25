@@ -15,16 +15,9 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Forge 1.7.10 / GTNH 配方查询工具。
- *
- * 不直接依赖 GregTech 的编译期类，运行时通过反射探测 GT5U，
- * 因此即使玩家没有安装 GregTech，本模组仍然可以正常构建和运行。
- */
 public final class RecipeSearchTool implements Tool {
 
     @Override
@@ -34,17 +27,11 @@ public final class RecipeSearchTool implements Tool {
 
     @Override
     public String getDescription() {
-        return "查询 Minecraft/GTNH 中如何制作指定物品。"
-                + "参数直接填写物品名称，例如：iron plate、钢板、碳纳米管。"
-                + "会同时查询 Forge 合成表以及运行中的 GregTech RecipeMap。"
-                + "这是只读工具，不会实际消耗物品或操作机器。";
+        return "查询 Minecraft/GTNH 中指定物品的真实配方。";
     }
 
     @Override
-    public ToolResult execute(
-            final ToolContext context,
-            final String arguments) {
-
+    public ToolResult execute(final ToolContext context, final String arguments) {
         final String query = extractQuery(arguments);
 
         if (query.length() == 0) {
@@ -56,20 +43,17 @@ public final class RecipeSearchTool implements Tool {
                     new Callable<String>() {
                         @Override
                         public String call() {
-                            return RecipeKnowledge.query(query, 8);
+                            return queryRecipes(query, 8);
                         }
                     },
                     8,
                     TimeUnit.SECONDS);
 
             return ToolResult.success(result);
-
         } catch (Exception e) {
             return ToolResult.failure(
-                    "查询配方失败："
-                            + e.getClass().getSimpleName()
-                            + " "
-                            + String.valueOf(e.getMessage()));
+                    "查询配方失败：" + e.getClass().getSimpleName()
+                            + " " + String.valueOf(e.getMessage()));
         }
     }
 
@@ -80,8 +64,6 @@ public final class RecipeSearchTool implements Tool {
 
         String value = arguments.trim();
 
-        // 兼容模型可能产生的简单 JSON：
-        // {"query":"钢板"}
         int q = value.indexOf("\"query\"");
         if (q >= 0) {
             int colon = value.indexOf(':', q);
@@ -99,140 +81,383 @@ public final class RecipeSearchTool implements Tool {
         return value;
     }
 
-    private static final class RecipeKnowledge {
+    private static String queryRecipes(String query, int limit) {
+        String lower = query.toLowerCase();
+        StringBuilder result = new StringBuilder();
+        int found = 0;
 
-        private static String query(String query, int maxResults) {
-            String lower = query.toLowerCase();
-            StringBuilder out = new StringBuilder();
-            int found = 0;
+        result.append("配方查询：").append(query).append('\n');
 
-            out.append("配方查询：").append(query).append('\n');
+        List<?> recipes = CraftingManager.getInstance().getRecipeList();
 
-            // 1. Forge 1.7.10 原版/普通 Forge IRecipe。
-            List<?> recipes = CraftingManager.getInstance().getRecipeList();
-
-            for (Object obj : recipes) {
-                if (!(obj instanceof IRecipe)) {
-                    continue;
-                }
-
-                IRecipe recipe = (IRecipe) obj;
-                ItemStack output = recipe.getRecipeOutput();
-
-                if (!matches(output, lower)) {
-                    continue;
-                }
-
-                out.append(formatCraftingRecipe(recipe, output))
-                        .append('\n');
-
-                found++;
-
-                if (found >= maxResults) {
-                    return out.toString();
-                }
+        for (Object object : recipes) {
+            if (!(object instanceof IRecipe)) {
+                continue;
             }
 
-            // 2. GregTech 5U。
-            try {
-                found = appendGregTechResults(
-                        out, lower, maxResults - found, found);
-            } catch (Throwable ignored) {
-                // GT 不存在或 API 与当前 GTNH 版本不同，忽略。
+            IRecipe recipe = (IRecipe) object;
+            ItemStack output = recipe.getRecipeOutput();
+
+            if (!matches(output, lower)) {
+                continue;
             }
 
-            if (found == 0) {
-                out.append("没有找到匹配的已注册配方。");
-            }
+            result.append(formatForgeRecipe(recipe, output)).append('\n');
+            found++;
 
-            return out.toString();
+            if (found >= limit) {
+                return result.toString();
+            }
         }
 
-        private static boolean matches(ItemStack stack, String query) {
-            if (stack == null) {
-                return false;
-            }
-
-            String display = safeLower(stack.getDisplayName());
-            String unlocalized = safeLower(stack.getUnlocalizedName());
-
-            return display.contains(query)
-                    || unlocalized.contains(query);
+        try {
+            found = appendGregTechRecipes(
+                    result, lower, limit, found);
+        } catch (Throwable ignored) {
+            // 没有 GT 或 GT API 不兼容时，只返回 Forge 配方。
         }
 
-        private static String formatCraftingRecipe(
-                IRecipe recipe,
-                ItemStack output) {
+        if (found == 0) {
+            result.append("没有找到匹配的已注册配方。");
+        }
 
-            StringBuilder s = new StringBuilder();
+        return result.toString();
+    }
 
-            s.append("[Forge合成] 输出=")
-                    .append(stackName(output))
-                    .append(" x")
-                    .append(output.stackSize);
+    private static boolean matches(ItemStack stack, String query) {
+        if (stack == null) {
+            return false;
+        }
 
-            try {
-                ItemStack[] inputs = recipe.getInput();
+        String display = stack.getDisplayName();
+        String unlocalized = stack.getUnlocalizedName();
 
-                s.append("；输入=");
-                boolean first = true;
+        return (display != null && display.toLowerCase().contains(query))
+                || (unlocalized != null && unlocalized.toLowerCase().contains(query));
+    }
 
-                if (inputs != null) {
-                    for (ItemStack input : inputs) {
-                        if (input == null) {
-                            continue;
-                        }
+    private static String formatForgeRecipe(IRecipe recipe, ItemStack output) {
+        StringBuilder result = new StringBuilder();
 
-                        if (!first) {
-                            s.append(" + ");
-                        }
+        result.append("[Forge合成] 输出=")
+                .append(stackName(output))
+                .append(" x")
+                .append(output.stackSize);
 
-                        s.append(stackName(input))
-                                .append(" x")
-                                .append(input.stackSize);
+        try {
+            ItemStack[] inputs = recipe.getInput();
+            result.append("；输入=");
 
-                        first = false;
+            boolean first = true;
+            if (inputs != null) {
+                for (ItemStack input : inputs) {
+                    if (input == null) {
+                        continue;
                     }
-                }
-            } catch (Throwable ignored) {
-                // 某些特殊 IRecipe 不提供普通输入数组。
-            }
 
-            return s.toString();
+                    if (!first) {
+                        result.append(" + ");
+                    }
+
+                    result.append(stackName(input))
+                            .append(" x")
+                            .append(input.stackSize);
+                    first = false;
+                }
+            }
+        } catch (Throwable ignored) {
+            result.append("；输入=特殊配方");
         }
 
-        @SuppressWarnings("unchecked")
-        private static int appendGregTechResults(
-                StringBuilder out,
-                String query,
-                int remaining,
-                int found) throws Exception {
+        return result.toString();
+    }
 
-            if (remaining <= 0) {
-                return found;
+    @SuppressWarnings("unchecked")
+    private static int appendGregTechRecipes(
+            StringBuilder result,
+            String query,
+            int limit,
+            int found) throws Exception {
+
+        if (found >= limit) {
+            return found;
+        }
+
+        Class<?> recipeMapClass =
+                Class.forName("gregtech.api.recipe.RecipeMap");
+
+        Field allMapsField =
+                recipeMapClass.getField("ALL_RECIPE_MAPS");
+
+        Object allMapsObject =
+                allMapsField.get(null);
+
+        if (!(allMapsObject instanceof Map)) {
+            return found;
+        }
+
+        Map<Object, Object> maps =
+                (Map<Object, Object>) allMapsObject;
+
+        Method getBackend =
+                recipeMapClass.getMethod("getBackend");
+
+        for (Map.Entry<Object, Object> entry : maps.entrySet()) {
+            if (found >= limit) {
+                break;
             }
 
-            Class<?> recipeMapClass =
-                    Class.forName("gregtech.api.recipe.RecipeMap");
+            Object recipeMap = entry.getValue();
+            Object backend = getBackend.invoke(recipeMap);
 
-            Field allMaps =
-                    recipeMapClass.getField("ALL_RECIPE_MAPS");
+            Method getAllRecipes =
+                    backend.getClass().getMethod("getAllRecipes");
 
-            Object mapObject = allMaps.get(null);
+            Object collectionObject =
+                    getAllRecipes.invoke(backend);
 
-            if (!(mapObject instanceof Map)) {
-                return found;
+            if (!(collectionObject instanceof Collection)) {
+                continue;
             }
 
-            Map<Object, Object> maps =
-                    (Map<Object, Object>) mapObject;
+            Collection<?> recipes =
+                    (Collection<?>) collectionObject;
 
-            Method getBackend =
-                    recipeMapClass.getMethod("getBackend");
-
-            for (Map.Entry<Object, Object> entry : maps.entrySet()) {
-                if (found >= remaining + found) {
+            for (Object recipe : recipes) {
+                if (found >= limit) {
                     break;
                 }
 
-                Object map = entry.ge
+                ItemStack[] outputs =
+                        getItemStackArray(recipe, "mOutputs");
+
+                if (!contains(outputs, query)) {
+                    continue;
+                }
+
+                result.append("[GregTech/")
+                        .append(String.valueOf(entry.getKey()))
+                        .append("] ")
+                        .append(formatGTRecipe(recipe))
+                        .append('\n');
+
+                found++;
+            }
+        }
+
+        return found;
+    }
+
+    private static String formatGTRecipe(Object recipe) {
+        StringBuilder result = new StringBuilder();
+
+        result.append("输出=")
+                .append(formatStacks(getItemStackArray(recipe, "mOutputs")))
+                .append("；输入=")
+                .append(formatStacks(getItemStackArray(recipe, "mInputs")));
+
+        FluidStack[] fluids =
+                getFluidStackArray(recipe, "mFluidInputs");
+
+        if (fluids != null && fluids.length > 0) {
+            result.append("；流体输入=")
+                    .append(formatFluids(fluids));
+        }
+
+        Integer duration =
+                getIntField(recipe, "mDuration");
+
+        Integer eut =
+                getIntField(recipe, "mEUt");
+
+        if (duration != null) {
+            result.append("；时间=")
+                    .append(duration.intValue())
+                    .append(" ticks");
+        }
+
+        if (eut != null) {
+            result.append("；EU/t=")
+                    .append(eut.intValue());
+        }
+
+        return result.toString();
+    }
+
+    private static ItemStack[] getItemStackArray(
+            Object object,
+            String fieldName) {
+
+        try {
+            Field field =
+                    findField(object.getClass(), fieldName);
+
+            if (field == null) {
+                return null;
+            }
+
+            field.setAccessible(true);
+
+            Object value = field.get(object);
+
+            return value instanceof ItemStack[]
+                    ? (ItemStack[]) value
+                    : null;
+
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static FluidStack[] getFluidStackArray(
+            Object object,
+            String fieldName) {
+
+        try {
+            Field field =
+                    findField(object.getClass(), fieldName);
+
+            if (field == null) {
+                return null;
+            }
+
+            field.setAccessible(true);
+
+            Object value = field.get(object);
+
+            return value instanceof FluidStack[]
+                    ? (FluidStack[]) value
+                    : null;
+
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Integer getIntField(
+            Object object,
+            String fieldName) {
+
+        try {
+            Field field =
+                    findField(object.getClass(), fieldName);
+
+            if (field == null) {
+                return null;
+            }
+
+            field.setAccessible(true);
+
+            Object value = field.get(object);
+
+            return value instanceof Number
+                    ? Integer.valueOf(
+                            ((Number) value).intValue())
+                    : null;
+
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Field findField(
+            Class<?> type,
+            String name) {
+
+        Class<?> current = type;
+
+        while (current != null) {
+            try {
+                return current.getDeclaredField(name);
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+
+        return null;
+    }
+
+    private static boolean contains(
+            ItemStack[] stacks,
+            String query) {
+
+        if (stacks == null) {
+            return false;
+        }
+
+        for (ItemStack stack : stacks) {
+            if (matches(stack, query)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static String formatStacks(ItemStack[] stacks) {
+        if (stacks == null || stacks.length == 0) {
+            return "无/特殊输入";
+        }
+
+        StringBuilder result =
+                new StringBuilder();
+
+        boolean first = true;
+
+        for (ItemStack stack : stacks) {
+            if (stack == null) {
+                continue;
+            }
+
+            if (!first) {
+                result.append(" + ");
+            }
+
+            result.append(stackName(stack))
+                    .append(" x")
+                    .append(stack.stackSize);
+
+            first = false;
+        }
+
+        return first
+                ? "无/特殊输入"
+                : result.toString();
+    }
+
+    private static String formatFluids(
+            FluidStack[] fluids) {
+
+        StringBuilder result =
+                new StringBuilder();
+
+        boolean first = true;
+
+        for (FluidStack fluid : fluids) {
+            if (fluid == null
+                    || fluid.getFluid() == null) {
+                continue;
+            }
+
+            if (!first) {
+                result.append(" + ");
+            }
+
+            result.append(fluid.getFluid().getName())
+                    .append(' ')
+                    .append(fluid.amount)
+                    .append("mB");
+
+            first = false;
+        }
+
+        return first ? "无" : result.toString();
+    }
+
+    private static String stackName(ItemStack stack) {
+        return stack.getDisplayName()
+                + " ["
+                + stack.getUnlocalizedName()
+                + "]";
+    }
+}
