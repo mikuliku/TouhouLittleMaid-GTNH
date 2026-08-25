@@ -1,6 +1,7 @@
 package com.mikuliku.touhoulittlemaidgtnh.entity;
 
 import com.mikuliku.touhoulittlemaidgtnh.ai.MaidChatManager;
+
 import net.minecraft.entity.EntityAgeable;
 import net.minecraft.entity.SharedMonsterAttributes;
 import net.minecraft.entity.ai.EntityAIFollowOwner;
@@ -19,11 +20,16 @@ public class EntityMaidJiuHu extends EntityTameable {
         super(world);
 
         this.setSize(0.6F, 1.5F);
+
         this.getNavigator().setAvoidsWater(true);
 
-        this.tasks.addTask(0, new EntityAISwimming(this));
+        this.tasks.addTask(
+                0,
+                new EntityAISwimming(this)
+        );
     }
 
+    @Override
     protected void applyEntityAttributes() {
         super.applyEntityAttributes();
 
@@ -67,8 +73,6 @@ public class EntityMaidJiuHu extends EntityTameable {
 
     /**
      * 设置酒狐的主人。
-     *
-     * Minecraft 1.7.10 使用 UUID 字符串保存 EntityTameable 的主人。
      */
     public void setOwnerPlayer(EntityPlayer player) {
 
@@ -90,18 +94,18 @@ public class EntityMaidJiuHu extends EntityTameable {
     }
 
     /**
-     * Minecraft 1.7.10 的实体聊天名称接口。
-     *
-     * 注意：
-     * 1.7.10 没有新版本中的 getDisplayName()。
-     * 对实体应该使用 func_145748_c_()。
+     * Minecraft 1.7.10 实体显示名称。
      */
     @Override
     public IChatComponent func_145748_c_() {
         return new ChatComponentText("酒狐");
     }
 
-    @Override
+    /**
+     * Minecraft 1.7.10 命令发送者名称。
+     *
+     * 这里故意不添加 @Override。
+     */
     public String getCommandSenderName() {
         return "酒狐";
     }
@@ -124,7 +128,14 @@ public class EntityMaidJiuHu extends EntityTameable {
         chatCooldown = ticks;
     }
 
-    public void askAI(EntityPlayer player, String message) {
+    /**
+     * 向 AI 系统发送玩家消息。
+     */
+    public void askAI(
+            EntityPlayer player,
+            String message
+    ) {
+
         MaidChatManager.request(
                 this,
                 player,
