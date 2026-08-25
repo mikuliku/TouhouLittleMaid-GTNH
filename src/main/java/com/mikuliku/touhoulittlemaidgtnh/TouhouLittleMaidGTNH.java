@@ -2,6 +2,7 @@ package com.mikuliku.touhoulittlemaidgtnh;
 
 import com.mikuliku.touhoulittlemaidgtnh.ai.AIConfig;
 import com.mikuliku.touhoulittlemaidgtnh.ai.MaidChatEventHandler;
+import com.mikuliku.touhoulittlemaidgtnh.ai.MaidMainThreadScheduler;
 import com.mikuliku.touhoulittlemaidgtnh.ai.ToolRegistry;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.PlayerStatusTool;
 import com.mikuliku.touhoulittlemaidgtnh.command.CommandJiuHu;
@@ -25,35 +26,21 @@ import net.minecraftforge.common.MinecraftForge;
 )
 public class TouhouLittleMaidGTNH {
 
-    public static final String MODID =
-            "touhoulittlemaidgtnh";
-
-    public static final String VERSION =
-            "0.3.0-gtnh";
+    public static final String MODID = "touhoulittlemaidgtnh";
+    public static final String VERSION = "0.3.0-gtnh";
 
     @SidedProxy(
-            clientSide =
-                    "com.mikuliku.touhoulittlemaidgtnh.proxy.ClientProxy",
-            serverSide =
-                    "com.mikuliku.touhoulittlemaidgtnh.proxy.CommonProxy"
+            clientSide = "com.mikuliku.touhoulittlemaidgtnh.proxy.ClientProxy",
+            serverSide = "com.mikuliku.touhoulittlemaidgtnh.proxy.CommonProxy"
     )
     public static CommonProxy proxy;
 
     @Mod.EventHandler
-    public void preInit(
-            FMLPreInitializationEvent event) {
+    public void preInit(FMLPreInitializationEvent event) {
 
-        /*
-         * AI 配置
-         */
         AIConfig.load(
-                event.getSuggestedConfigurationFile()
-                        .getParentFile()
-        );
+                event.getSuggestedConfigurationFile().getParentFile());
 
-        /*
-         * 注册酒狐实体
-         */
         EntityRegistry.registerModEntity(
                 EntityMaidJiuHu.class,
                 "maid",
@@ -61,46 +48,21 @@ public class TouhouLittleMaidGTNH {
                 this,
                 80,
                 3,
-                true
-        );
+                true);
 
-        /*
-         * 注册 AI Tool
-         */
-        ToolRegistry.register(
-                new PlayerStatusTool()
-        );
+        ToolRegistry.register(new PlayerStatusTool());
 
-        /*
-         * 注册聊天事件
-         */
         MinecraftForge.EVENT_BUS.register(
-                new MaidChatEventHandler()
-        );
+                new MaidChatEventHandler());
 
-        FMLCommonHandler.instance()
-                .bus()
-                .register(
-                        new MaidChatEventHandler()
-                );
+        FMLCommonHandler.instance().bus().register(
+                new MaidMainThreadScheduler());
 
-        /*
-         * Proxy 初始化
-         */
         proxy.preInit();
     }
 
-    /**
-     * 注册服务器命令。
-     *
-     * /jiuhu
-     */
     @Mod.EventHandler
-    public void serverStarting(
-            FMLServerStartingEvent event) {
-
-        event.registerServerCommand(
-                new CommandJiuHu()
-        );
+    public void serverStarting(FMLServerStartingEvent event) {
+        event.registerServerCommand(new CommandJiuHu());
     }
 }
