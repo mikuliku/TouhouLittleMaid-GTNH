@@ -114,7 +114,7 @@ public final class RecipeSearchTool implements Tool {
             found = appendGregTechRecipes(
                     result, lower, limit, found);
         } catch (Throwable ignored) {
-            // 没有 GT 或 GT API 不兼容时，只返回 Forge 配方。
+            // GregTech 不存在或 API 不兼容时，保留 Forge 配方结果。
         }
 
         if (found == 0) {
@@ -136,40 +136,169 @@ public final class RecipeSearchTool implements Tool {
                 || (unlocalized != null && unlocalized.toLowerCase().contains(query));
     }
 
-    private static String formatForgeRecipe(IRecipe recipe, ItemStack output) {
+    /*
+     * Forge 1.7.10 的 IRecipe 接口没有统一的 getInput() 方法。
+     * 因此这里不能直接写 recipe.getInput()。
+     *
+     * 1.7.10 不同配方类型把输入保存的位置不同：
+     * - ShapedRecipes / ShapelessRecipes: recipeItems
+     * - ShapedOreRecipe / ShapelessOreRecipe: getInput()
+     *
+     * 为了兼容 GTNH 中各种 1.7.10 配方，这里统一使用反射读取。
+     */
+    private static String formatForgeRecipe(
+            IRecipe recipe,
+            ItemStack output) {
+
         StringBuilder result = new StringBuilder();
 
         result.append("[Forge合成] 输出=")
                 .append(stackName(output))
                 .append(" x")
-                .append(output.stackSize);
+                .append(output.stackSize)
+                .append("；输入=");
 
-        try {
-            ItemStack[] inputs = recipe.getInput();
-            result.append("；输入=");
-
-            boolean first = true;
-            if (inputs != null) {
-                for (ItemStack input : inputs) {
-                    if (input == null) {
-                        continue;
-                    }
-
-                    if (!first) {
-                        result.append(" + ");
-                    }
-
-                    result.append(stackName(input))
-                            .append(" x")
-                            .append(input.stackSize);
-                    first = false;
-                }
-            }
-        } catch (Throwable ignored) {
-            result.append("；输入=特殊配方");
-        }
+        Object inputs = readRecipeInputs(recipe);
+        result.append(formatRecipeInputs(inputs));
 
         return result.toString();
+    }
+
+    private static Object readRecipeInputs(IRecipe recipe) {
+        try {
+            Method method = findMethod(
+                    recipe.getClass(),
+                    "getInput");
+
+            if (method != null) {
+                method.setAccessible(true);
+                return method.invoke(recipe);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        try {
+            Field field = findField(
+                    recipe.getClass(),
+                    "recipeItems");
+
+            if (field != null) {
+                field.setAccessible(true);
+                return field.get(recipe);
+            }
+        } catch (Throwable ignored) {
+        }
+
+        return null;
+    }
+
+    private static String formatRecipeInputs(Object inputs) {
+        if (inputs == null) {
+            return "特殊配方";
+        }
+
+        StringBuilder result = new StringBuilder();
+
+        if (inputs instanceof ItemStack[]) {
+            ItemStack[] stacks = (ItemStack[]) inputs;
+
+            boolean first = true;
+            for (ItemStack stack : stacks) {
+                if (stack == null) {
+                    continue;
+                }
+
+                if (!first) {
+                    result.append(" + ");
+                }
+
+                result.append(stackName(stack))
+                        .append(" x")
+                        .append(stack.stackSize);
+
+                first = false;
+            }
+
+            return first ? "无/特殊输入" : result.toString();
+        }
+
+        if (inputs instanceof List) {
+            List<?> list = (List<?>) inputs;
+
+            boolean first = true;
+
+            for (Object object : list) {
+                ItemStack stack = null;
+
+                if (object instanceof ItemStack) {
+                    stack = (ItemStack) object;
+                } else if (object instanceof List) {
+                    List<?> alternatives = (List<?>) object;
+
+                    if (!alternatives.isEmpty()
+                            && alternatives.get(0) instanceof ItemStack) {
+                        stack = (ItemStack) alternatives.get(0);
+                    }
+                }
+
+                if (stack == null) {
+                    continue;
+                }
+
+                if (!first) {
+                    result.append(" + ");
+                }
+
+                result.append(stackName(stack))
+                        .append(" x")
+                        .append(stack.stackSize);
+
+                first = false;
+            }
+
+            return first ? "特殊输入" : result.toString();
+        }
+
+        if (inputs.getClass().isArray()) {
+            int length = java.lang.reflect.Array.getLength(inputs);
+            boolean first = true;
+
+            for (int i = 0; i < length; i++) {
+                Object object =
+                        java.lang.reflect.Array.get(inputs, i);
+
+                ItemStack stack = null;
+
+                if (object instanceof ItemStack) {
+                    stack = (ItemStack) object;
+                } else if (object instanceof List) {
+                    List<?> alternatives = (List<?>) object;
+
+                    if (!alternatives.isEmpty()
+                            && alternatives.get(0) instanceof ItemStack) {
+                        stack = (ItemStack) alternatives.get(0);
+                    }
+                }
+
+                if (stack == null) {
+                    continue;
+                }
+
+                if (!first) {
+                    result.append(" + ");
+                }
+
+                result.append(stackName(stack))
+                        .append(" x")
+                        .append(stack.stackSize);
+
+                first = false;
+            }
+
+            return first ? "特殊输入" : result.toString();
+        }
+
+        return String.valueOf(inputs);
     }
 
     @SuppressWarnings("unchecked")
@@ -211,7 +340,15 @@ public final class RecipeSearchTool implements Tool {
             Object backend = getBackend.invoke(recipeMap);
 
             Method getAllRecipes =
-                    backend.getClass().getMethod("getAllRecipes");
+                    findMethod(
+                            backend.getClass(),
+                            "getAllRecipes");
+
+            if (getAllRecipes == null) {
+                continue;
+            }
+
+            getAllRecipes.setAccessible(true);
 
             Object collectionObject =
                     getAllRecipes.invoke(backend);
@@ -252,9 +389,11 @@ public final class RecipeSearchTool implements Tool {
         StringBuilder result = new StringBuilder();
 
         result.append("输出=")
-                .append(formatStacks(getItemStackArray(recipe, "mOutputs")))
+                .append(formatStacks(
+                        getItemStackArray(recipe, "mOutputs")))
                 .append("；输入=")
-                .append(formatStacks(getItemStackArray(recipe, "mInputs")));
+                .append(formatStacks(
+                        getItemStackArray(recipe, "mInputs")));
 
         FluidStack[] fluids =
                 getFluidStackArray(recipe, "mFluidInputs");
@@ -370,6 +509,26 @@ public final class RecipeSearchTool implements Tool {
             try {
                 return current.getDeclaredField(name);
             } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+
+        return null;
+    }
+
+    private static Method findMethod(
+            Class<?> type,
+            String name,
+            Class<?>... parameterTypes) {
+
+        Class<?> current = type;
+
+        while (current != null) {
+            try {
+                return current.getDeclaredMethod(
+                        name,
+                        parameterTypes);
+            } catch (NoSuchMethodException ignored) {
                 current = current.getSuperclass();
             }
         }
