@@ -1,0 +1,17 @@
+[
+  {
+    "modid": "touhoulittlemaidgtnh",
+    "name": "Touhou Little Maid - GTNH Edition",
+    "description": "Touhou Little Maid port for Minecraft 1.7.10 GTNH, featuring an AI-powered maid named JiuHu.",
+    "version": "0.3.0-gtnh",
+    "mcversion": "1.7.10",
+    "url": "https://github.com/mikuliku/TouhouLittleMaid-GTNH",
+    "authorList": [
+      "mikuliku"
+    ],
+    "credits": "Touhou Little Maid community",
+    "logoFile": "",
+    "screenshots": [],
+    "dependencies": []
+  }
+]
