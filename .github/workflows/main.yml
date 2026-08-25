@@ -33,8 +33,8 @@ jobs:
           java -version
           gradle --version
 
-      - name: Prepare ForgeGradle workspace
-        run: gradle setupCIWorkspace --no-daemon
+      - name: Prepare ForgeGradle decomp workspace
+        run: gradle setupDecompWorkspace --no-daemon --refresh-dependencies
 
       - name: Build mod
         run: gradle build --no-daemon
@@ -44,6 +44,7 @@ jobs:
         run: |
           echo "===== build/libs ====="
           ls -lah build/libs || true
+
           echo "===== build ====="
           find build -maxdepth 3 -type f | sort | head -200 || true
 
