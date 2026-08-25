@@ -9,7 +9,6 @@ import net.minecraft.entity.ai.EntityAISwimming;
 import net.minecraft.entity.passive.EntityTameable;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.ChatComponentText;
-import net.minecraft.util.IChatComponent;
 import net.minecraft.world.World;
 
 public class EntityMaidJiuHu extends EntityTameable {
@@ -29,7 +28,6 @@ public class EntityMaidJiuHu extends EntityTameable {
         );
     }
 
-    @Override
     protected void applyEntityAttributes() {
         super.applyEntityAttributes();
 
@@ -42,17 +40,14 @@ public class EntityMaidJiuHu extends EntityTameable {
         ).setBaseValue(0.30D);
     }
 
-    @Override
     protected void entityInit() {
         super.entityInit();
     }
 
-    @Override
     public EntityAgeable createChild(EntityAgeable entity) {
         return null;
     }
 
-    @Override
     public boolean interact(EntityPlayer player) {
 
         if (!this.worldObj.isRemote
@@ -94,23 +89,15 @@ public class EntityMaidJiuHu extends EntityTameable {
     }
 
     /**
-     * Minecraft 1.7.10 实体显示名称。
-     */
-    @Override
-    public IChatComponent func_145748_c_() {
-        return new ChatComponentText("酒狐");
-    }
-
-    /**
-     * Minecraft 1.7.10 命令发送者名称。
+     * 酒狐的名称。
      *
-     * 这里故意不添加 @Override。
+     * Minecraft 1.7.10 的 EntityLiving 提供
+     * getCommandSenderName()。
      */
     public String getCommandSenderName() {
         return "酒狐";
     }
 
-    @Override
     public void onLivingUpdate() {
 
         super.onLivingUpdate();
