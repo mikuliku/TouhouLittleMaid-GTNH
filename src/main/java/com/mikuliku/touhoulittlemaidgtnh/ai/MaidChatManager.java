@@ -22,9 +22,12 @@ public final class MaidChatManager {
             return;
         }
 
-        maid.setChatCooldown(20);
+        maid.setChatCooldown(AIConfig.chatCooldownTicks);
+
         player.addChatMessage(
                 new ChatComponentText("§d酒狐§f：让我想一下……"));
+
+        final String playerMessage = message;
 
         EXECUTOR.submit(new Runnable() {
             @Override
@@ -32,7 +35,9 @@ public final class MaidChatManager {
                 final String reply;
 
                 try {
-                    reply = LLMClient.chat(message);
+                    reply = LLMClient.chat(
+                            player.getUniqueID(),
+                            playerMessage);
                 } catch (Exception e) {
                     player.addChatMessage(
                             new ChatComponentText(
