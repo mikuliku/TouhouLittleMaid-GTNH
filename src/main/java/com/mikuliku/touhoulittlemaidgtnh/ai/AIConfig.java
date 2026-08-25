@@ -5,11 +5,18 @@ import net.minecraftforge.common.config.Configuration;
 
 public final class AIConfig {
     public static boolean enabled = false;
-    public static String apiUrl = "https://api.openai.com/v1/chat/completions";
+
+    // Default: local Ollama. No API key and no internet are required.
+    public static String apiUrl =
+            "http://localhost:11434/v1/chat/completions";
     public static String apiKey = "";
-    public static String model = "gpt-4o-mini";
+    public static String model = "qwen3:4b-instruct";
+
     public static double temperature = 0.7D;
     public static int maxTokens = 512;
+
+    public static int connectTimeoutMs = 5000;
+    public static int readTimeoutMs = 120000;
 
     private static Configuration config;
 
@@ -22,19 +29,72 @@ public final class AIConfig {
     }
 
     public static void sync() {
-        enabled = config.getBoolean("enabled", "AI", false,
-                "Enable AI chat.");
-        apiUrl = config.getString("apiUrl", "AI",
-                apiUrl, "OpenAI-compatible chat completions endpoint.");
-        apiKey = config.getString("apiKey", "AI",
-                "", "API key. Never commit this file to GitHub.");
-        model = config.getString("model", "AI",
-                model, "Model name.");
-        temperature = config.getFloat("temperature", "AI",
-                0.7F, 0.0F, 2.0F, "Sampling temperature.");
-        maxTokens = config.getInt("maxTokens", "AI",
-                512, 32, 8192, "Maximum response tokens.");
+        enabled = config.getBoolean(
+                "enabled",
+                "AI",
+                false,
+                "Enable 酒狐 AI chat."
+        );
 
-        if (config.hasChanged()) config.save();
+        apiUrl = config.getString(
+                "apiUrl",
+                "AI",
+                "http://localhost:11434/v1/chat/completions",
+                "OpenAI-compatible endpoint. Default is local Ollama."
+        );
+
+        apiKey = config.getString(
+                "apiKey",
+                "AI",
+                "",
+                "API key. Leave empty when using Ollama."
+        );
+
+        model = config.getString(
+                "model",
+                "AI",
+                "qwen3:4b-instruct",
+                "Local Ollama model or OpenAI-compatible model name."
+        );
+
+        temperature = config.getFloat(
+                "temperature",
+                "AI",
+                0.7F,
+                0.0F,
+                2.0F,
+                "Sampling temperature."
+        );
+
+        maxTokens = config.getInt(
+                "maxTokens",
+                "AI",
+                512,
+                32,
+                4096,
+                "Maximum response tokens."
+        );
+
+        connectTimeoutMs = config.getInt(
+                "connectTimeoutMs",
+                "AI",
+                5000,
+                1000,
+                60000,
+                "Connection timeout in milliseconds."
+        );
+
+        readTimeoutMs = config.getInt(
+                "readTimeoutMs",
+                "AI",
+                120000,
+                5000,
+                600000,
+                "AI response timeout in milliseconds."
+        );
+
+        if (config.hasChanged()) {
+            config.save();
+        }
     }
 }
