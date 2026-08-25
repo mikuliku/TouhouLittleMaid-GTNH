@@ -10,6 +10,7 @@ import net.minecraftforge.event.ServerChatEvent;
 import java.util.List;
 
 public final class MaidChatEventHandler {
+
     @SubscribeEvent
     public void onServerChat(ServerChatEvent event) {
         if (event.player == null || event.message == null) {
@@ -25,6 +26,14 @@ public final class MaidChatEventHandler {
             }
 
             message = message.substring(prefix.length()).trim();
+
+            while (message.startsWith("，")
+                    || message.startsWith(",")
+                    || message.startsWith("：")
+                    || message.startsWith(":")
+                    || message.startsWith(" ")) {
+                message = message.substring(1).trim();
+            }
         }
 
         if (message.length() == 0) {
@@ -35,9 +44,21 @@ public final class MaidChatEventHandler {
             return;
         }
 
+        if (!AIConfig.enabled) {
+            event.player.addChatMessage(
+                    new net.minecraft.util.ChatComponentText(
+                            "§d酒狐§f：AI 功能还没有开启哦，请先检查配置文件。"));
+            event.setCanceled(true);
+            return;
+        }
+
         EntityMaidJiuHu maid = findNearestMaid(event.player);
 
         if (maid == null) {
+            event.player.addChatMessage(
+                    new net.minecraft.util.ChatComponentText(
+                            "§d酒狐§f：主人，请先把我召唤到附近再和我聊天哦。"));
+            event.setCanceled(true);
             return;
         }
 
@@ -58,7 +79,8 @@ public final class MaidChatEventHandler {
         );
 
         List<EntityMaidJiuHu> maids =
-                player.worldObj.getEntitiesWithinAABB(EntityMaidJiuHu.class, box);
+                player.worldObj.getEntitiesWithinAABB(
+                        EntityMaidJiuHu.class, box);
 
         EntityMaidJiuHu nearest = null;
         double nearestDistance = Double.MAX_VALUE;
