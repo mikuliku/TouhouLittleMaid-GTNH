@@ -2,12 +2,14 @@ name: Build TouhouLittleMaid-GTNH
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
   workflow_dispatch:
 
 jobs:
   build:
+    name: Build Minecraft 1.7.10 Mod
     runs-on: ubuntu-22.04
 
     steps:
@@ -21,16 +23,29 @@ jobs:
           java-version: '8'
           architecture: x64
 
-      - name: Set up Gradle 2.14.1
+      - name: Set up Gradle 4.4.1
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '2.14.1'
+          gradle-version: '4.4.1'
+
+      - name: Show Java and Gradle versions
+        run: |
+          java -version
+          gradle --version
 
       - name: Prepare ForgeGradle workspace
         run: gradle setupCIWorkspace --no-daemon
 
       - name: Build mod
         run: gradle build --no-daemon
+
+      - name: List build output
+        if: always()
+        run: |
+          echo "===== build/libs ====="
+          ls -lah build/libs || true
+          echo "===== build ====="
+          find build -maxdepth 3 -type f | sort | head -200 || true
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
