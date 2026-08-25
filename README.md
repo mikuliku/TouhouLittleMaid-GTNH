@@ -1,1 +1,0 @@
-# TouhouLittleMaid-GTNH
