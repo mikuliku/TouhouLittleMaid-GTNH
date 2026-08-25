@@ -26,7 +26,8 @@ public final class MaidChatManager {
             return;
         }
 
-        maid.setChatCooldown(AIConfig.chatCooldownTicks);
+        maid.setChatCooldown(
+                AIConfig.chatCooldownTicks);
 
         player.addChatMessage(
                 new ChatComponentText(
@@ -36,8 +37,12 @@ public final class MaidChatManager {
             @Override
             public void run() {
                 try {
-                    final String reply = LLMClient.chat(
-                            player.getUniqueID(), message);
+                    // 第四步必须传入 EntityPlayer，
+                    // 这样 AI 工具才能在 Minecraft 主线程查询真实配方。
+                    final String reply =
+                            LLMClient.chat(
+                                    player,
+                                    message);
 
                     MaidMainThreadScheduler.execute(
                             new Runnable() {
@@ -52,6 +57,7 @@ public final class MaidChatManager {
                             });
 
                 } catch (final Exception e) {
+
                     MaidMainThreadScheduler.execute(
                             new Runnable() {
                                 @Override
@@ -72,12 +78,14 @@ public final class MaidChatManager {
     private static String safeMessage(Exception e) {
         String message = e.getMessage();
 
-        if (message == null || message.length() == 0) {
+        if (message == null
+                || message.length() == 0) {
             return e.getClass().getSimpleName();
         }
 
         if (message.length() > 180) {
-            return message.substring(0, 180) + "...";
+            return message.substring(0, 180)
+                    + "...";
         }
 
         return message;
