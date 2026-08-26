@@ -23,6 +23,11 @@ public final class AIConfig {
     public static int chatCooldownTicks = 20;
     public static int memoryTurns = 8;
 
+    public static boolean storageEnabled = true;
+    public static int storageRadius = 8;
+    public static int storageMaxContainers = 64;
+    public static int storageMaxTake = 256;
+
     private static Configuration config;
 
     private AIConfig() {}
@@ -91,6 +96,25 @@ public final class AIConfig {
                 "memoryTurns", "Chat", 8,
                 1, 32,
                 "Number of recent user/assistant turns retained.");
+
+        storageEnabled = config.getBoolean(
+                "storageEnabled", "Storage", true,
+                "Allow 酒狐 AI tools to inspect and take items from nearby IInventory containers.");
+
+        storageRadius = config.getInt(
+                "storageRadius", "Storage", 8,
+                1, 16,
+                "Radius around the player used when searching nearby containers.");
+
+        storageMaxContainers = config.getInt(
+                "storageMaxContainers", "Storage", 64,
+                1, 256,
+                "Maximum number of container tile entities inspected in one storage scan.");
+
+        storageMaxTake = config.getInt(
+                "storageMaxTake", "Storage", 256,
+                1, 4096,
+                "Maximum number of items one AI storage_take call may move to the player.");
 
         if (config.hasChanged()) {
             config.save();
