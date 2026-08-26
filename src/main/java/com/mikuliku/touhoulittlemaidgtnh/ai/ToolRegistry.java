@@ -60,8 +60,7 @@ public final class ToolRegistry {
                     .append(tool.getName())
                     .append(": ")
                     .append(tool.getDescription())
-                    .append('
-');
+                    .append('\n');
         }
 
         return result.toString();
