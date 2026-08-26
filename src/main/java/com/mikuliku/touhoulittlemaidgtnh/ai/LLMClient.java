@@ -6,23 +6,12 @@ import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * AI 对话入口。
- *
- * 第四步加入了一个兼容老模型的“文本工具调用”协议：
- *
- * [[TOOL:recipe_search]]
- * 要查询的物品
- *
- * 模型不需要原生支持 OpenAI tool_calls。
- */
 public final class LLMClient {
 
     private LLMClient() {}
 
     public static String chat(String userMessage)
             throws IOException {
-
         return chat(UUID.randomUUID(), userMessage);
     }
 
@@ -30,11 +19,7 @@ public final class LLMClient {
             UUID playerId,
             String userMessage)
             throws IOException {
-
-        return chatInternal(
-                null,
-                playerId,
-                userMessage);
+        return chatInternal(null, playerId, userMessage);
     }
 
     public static String chat(
@@ -63,7 +48,6 @@ public final class LLMClient {
         }
 
         String system = buildSystemPrompt(playerId);
-
         String answer;
 
         try {
@@ -87,6 +71,11 @@ public final class LLMClient {
 
             if (tool != null) {
 
+                /*
+                 * 每个需要访问Minecraft世界的工具自己负责切换到
+                 * 主线程。RecipeSearchTool和StorageContainerTool
+                 * 都使用MaidMainThreadScheduler.callAndWait。
+                 */
                 ToolResult result =
                         tool.execute(
                                 new ToolContext(player),
@@ -142,10 +131,8 @@ public final class LLMClient {
                 "你是 Minecraft GTNH 整合包中的女仆“酒狐”。")
                 .append("必须使用中文回答。")
                 .append("语气亲切、简洁、可靠。")
-                .append("你可以查询游戏配方，但不能虚构结果。")
-                .append("当前可用工具可能包括：")
-                .append("\n- recipe_search：查询 Minecraft 和 GregTech "
-                        + "配方；参数是物品名称。")
+                .append("你可以查询游戏配方，也可以检查附近容器并取出材料，")
+                .append("但不能虚构游戏数据或声称完成了没有执行的操作。")
                 .append("\n\n");
 
         system.append(
@@ -153,9 +140,21 @@ public final class LLMClient {
                 + "某物品的GT配方”等问题时，")
                 .append("如果需要游戏数据，请严格输出：")
                 .append("\n[[TOOL:recipe_search]]")
-                .append("\n查询物品名称")
+                .append("\n{\"query\":\"物品名称\"}")
                 .append("\n不要在工具调用前编造配方。")
                 .append("\n工具返回结果后，再用中文解释。")
+                .append("\n\n");
+
+        system.append(
+                "当玩家要求酒狐查看或拿取附近箱子里的材料时，")
+                .append("先输出：")
+                .append("\n[[TOOL:storage_container]]")
+                .append("\n{\"action\":\"scan\"}")
+                .append("\n根据扫描结果选择精确物品名称后，再输出：")
+                .append("\n[[TOOL:storage_container]]")
+                .append("\n{\"action\":\"take\",\"query\":\"精确物品名称\",\"amount\":数量}")
+                .append("\n只有工具返回成功后，才能告诉玩家已经取出材料。")
+                .append("\n如果工具提示多个相似物品，不要自行猜测。")
                 .append("\n\n");
 
         if (ToolRegistry.all().size() > 0) {
