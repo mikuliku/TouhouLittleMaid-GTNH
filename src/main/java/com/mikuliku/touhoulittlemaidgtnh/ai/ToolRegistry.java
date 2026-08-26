@@ -2,6 +2,7 @@ package com.mikuliku.touhoulittlemaidgtnh.ai;
 
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.CraftExecutorTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.RecipeSearchTool;
+import com.mikuliku.touhoulittlemaidgtnh.ai.tools.StorageContainerTool;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -29,6 +30,7 @@ public final class ToolRegistry {
 
         register(new RecipeSearchTool());
         register(new CraftExecutorTool());
+        register(new StorageContainerTool());
 
         defaultsRegistered = true;
     }
