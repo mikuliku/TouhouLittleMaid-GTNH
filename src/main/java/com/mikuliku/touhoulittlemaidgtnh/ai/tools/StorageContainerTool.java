@@ -19,13 +19,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 
 /**
- * GTNH/Forge 1.7.10 附近容器工具。
- *
- * 目前使用 1.7.10 最通用的 IInventory 接口，因此不仅支持原版箱子，
- * 也可以兼容大量使用 IInventory 的 GTNH 仓储容器。
- *
- * action=scan
- * action=take, query="物品名称", amount=数量
+ * Forge 1.7.10 / GTNH nearby inventory tool.
  */
 public final class StorageContainerTool implements Tool {
 
@@ -36,14 +30,14 @@ public final class StorageContainerTool implements Tool {
 
     @Override
     public String getDescription() {
-        return "扫描玩家附近的IInventory容器，或从附近容器安全取出指定物品到玩家背包；支持原版箱子和大量GTNH容器。"
+        return "扫描玩家附近的IInventory容器，或从附近容器安全取出指定物品到玩家背包。"
                 + " 参数：{\"action\":\"scan\"} 或 {\"action\":\"take\",\"query\":\"物品名称\",\"amount\":数量}。";
     }
 
     @Override
     public ToolResult execute(
             final ToolContext context,
-            final String arguments) {
+            final String argumentsJson) {
 
         if (!AIConfig.storageEnabled) {
             return ToolResult.failure("附近容器取料功能已在配置中关闭。");
@@ -54,7 +48,7 @@ public final class StorageContainerTool implements Tool {
         }
 
         final EntityPlayer player = context.getPlayer();
-        final String action = extractString(arguments, "action");
+        final String action = extractString(argumentsJson, "action");
 
         try {
             String result = MaidMainThreadScheduler.callAndWait(
@@ -62,11 +56,10 @@ public final class StorageContainerTool implements Tool {
                         @Override
                         public String call() {
                             if ("take".equalsIgnoreCase(action)) {
-                                String query = extractString(arguments, "query");
-                                int amount = extractInt(arguments, "amount", 1);
+                                String query = extractString(argumentsJson, "query");
+                                int amount = extractInt(argumentsJson, "amount", 1);
                                 return take(player, query, amount);
                             }
-
                             return scan(player);
                         }
                     },
@@ -86,7 +79,6 @@ public final class StorageContainerTool implements Tool {
     private static String scan(EntityPlayer player) {
         List<IInventory> inventories = findInventories(player);
         Map<String, Integer> totals = new LinkedHashMap<String, Integer>();
-        Map<String, String> names = new LinkedHashMap<String, String>();
 
         int nonEmptySlots = 0;
 
@@ -100,23 +92,18 @@ public final class StorageContainerTool implements Tool {
 
                 nonEmptySlots++;
 
-                String key = stack.getUnlocalizedName()
-                        + ":"
-                        + stack.getItemDamage();
-
+                /*
+                 * 不使用 getItemDamage()。
+                 * 这里使用玩家可见的 display name 作为查询层面的键，
+                 * 避免GTNH开发环境中不同class path/mapping造成的API冲突。
+                 */
+                String key = stack.getDisplayName();
                 Integer old = totals.get(key);
-                totals.put(
-                        key,
-                        (old == null ? 0 : old) + stack.stackSize);
-
-                if (!names.containsKey(key)) {
-                    names.put(key, stack.getDisplayName());
-                }
+                totals.put(key, (old == null ? 0 : old) + stack.stackSize);
             }
         }
 
         StringBuilder result = new StringBuilder();
-
         result.append("附近可访问容器：")
                 .append(inventories.size())
                 .append(" 个；非空槽位：")
@@ -129,22 +116,17 @@ public final class StorageContainerTool implements Tool {
         }
 
         int count = 0;
-
         for (Map.Entry<String, Integer> entry : totals.entrySet()) {
             if (count >= 80) {
                 result.append("……其余物品省略。");
                 break;
             }
 
-            String key = entry.getKey();
             result.append("- ")
-                    .append(names.get(key))
+                    .append(entry.getKey())
                     .append(" x")
                     .append(entry.getValue())
-                    .append(" [")
-                    .append(key)
-                    .append("]\n");
-
+                    .append('\n');
             count++;
         }
 
@@ -168,16 +150,14 @@ public final class StorageContainerTool implements Tool {
             return "取料失败：数量必须大于0。";
         }
 
-        requested = Math.min(
-                requested,
-                AIConfig.storageMaxTake);
+        requested = Math.min(requested, AIConfig.storageMaxTake);
 
         List<IInventory> inventories = findInventories(player);
 
-        ItemStack exact = null;
-        ItemStack fuzzy = null;
-        int fuzzyMatches = 0;
+        ItemStack selected = null;
+        int matches = 0;
 
+        // 先找精确名称。
         for (IInventory inventory : inventories) {
             for (int slot = 0; slot < inventory.getSizeInventory(); slot++) {
                 ItemStack stack = safeGet(inventory, slot);
@@ -187,44 +167,57 @@ public final class StorageContainerTool implements Tool {
                 }
 
                 if (matchesExact(stack, query)) {
-                    exact = stack;
-                    break;
+                    if (selected == null) {
+                        selected = stack;
+                    }
+                    if (!stack.isItemEqual(selected)) {
+                        matches++;
+                    }
                 }
-
-                if (matchesFuzzy(stack, query)) {
-                    fuzzy = stack;
-                    fuzzyMatches++;
-                }
-            }
-
-            if (exact != null) {
-                break;
             }
         }
 
-        if (exact == null && fuzzyMatches > 1) {
-            return "取料失败：“"
-                    + query
-                    + "”对应多个不同物品，请先使用storage_container的scan查询精确物品名称。";
+        // 没有精确命中时，允许唯一的模糊物品。
+        if (selected == null) {
+            for (IInventory inventory : inventories) {
+                for (int slot = 0; slot < inventory.getSizeInventory(); slot++) {
+                    ItemStack stack = safeGet(inventory, slot);
+
+                    if (stack == null || stack.stackSize <= 0) {
+                        continue;
+                    }
+
+                    if (matchesFuzzy(stack, query)) {
+                        if (selected == null) {
+                            selected = stack;
+                            matches = 1;
+                        } else if (!stack.isItemEqual(selected)) {
+                            matches++;
+                        }
+                    }
+                }
+            }
         }
 
-        if (exact == null && fuzzy == null) {
-            return "附近容器中没有找到“"
-                    + query
-                    + "”。";
+        if (selected == null) {
+            return "附近容器中没有找到“" + query + "”。";
         }
 
-        String selectedName = exact != null
-                ? exact.getDisplayName()
-                : fuzzy.getDisplayName();
+        if (matches > 1) {
+            return "取料失败：“" + query
+                    + "”对应多个不同物品，请先使用storage_container的scan查询精确名称。";
+        }
+
+        final ItemStack selectedReference = selected;
+        final String selectedName = selectedReference.getDisplayName();
 
         int remaining = requested;
         int moved = 0;
 
         for (IInventory inventory : inventories) {
             for (int slot = 0;
-                 slot < inventory.getSizeInventory() && remaining > 0;
-                 slot++) {
+                    slot < inventory.getSizeInventory() && remaining > 0;
+                    slot++) {
 
                 ItemStack stack = safeGet(inventory, slot);
 
@@ -232,23 +225,24 @@ public final class StorageContainerTool implements Tool {
                     continue;
                 }
 
-                if (!selectedName.equals(stack.getDisplayName())) {
+                /*
+                 * isItemEqual() 是 Forge 1.7.10 的标准 ItemStack 比较方法，
+                 * 可用于区分不同 metadata 的物品，而不直接调用 getItemDamage()。
+                 */
+                if (!stack.isItemEqual(selectedReference)) {
                     continue;
                 }
 
-                int amount = Math.min(
-                        remaining,
-                        stack.stackSize);
-
-                ItemStack removed;
+                int amount = Math.min(remaining, stack.stackSize);
+                ItemStack removed = null;
 
                 try {
-                    inventory.openInventory(player);
+                    inventory.openInventory();
                     removed = inventory.decrStackSize(slot, amount);
                     inventory.markDirty();
                 } finally {
                     try {
-                        inventory.closeInventory(player);
+                        inventory.closeInventory();
                     } catch (Throwable ignored) {
                     }
                 }
@@ -258,104 +252,98 @@ public final class StorageContainerTool implements Tool {
                 }
 
                 int removedAmount = removed.stackSize;
-                boolean inserted =
-                        player.inventory.addItemStackToInventory(removed);
 
-                if (!inserted) {
-                    // 1.7.10 InventoryPlayer 可能在空间不足时只部分接受。
-                    // 尽量把未接受的部分放回原槽位。
-                    if (removed.stackSize > 0) {
-                        ItemStack current =
-                                safeGet(inventory, slot);
+                /*
+                 * InventoryPlayer 在1.7.10可能部分接受物品。
+                 * 因此根据剩余数量计算真正转移的数量。
+                 */
+                player.inventory.addItemStackToInventory(removed);
 
-                        if (current == null) {
-                            inventory.setInventorySlotContents(
-                                    slot,
-                                    removed);
-                        } else if (sameItem(current, removed)) {
-                            int free =
-                                    inventory.getInventoryStackLimit()
-                                            - current.stackSize;
+                int leftover = Math.max(0, removed.stackSize);
+                int inserted = removedAmount - leftover;
 
-                            int restore =
-                                    Math.min(free, removed.stackSize);
-
-                            if (restore > 0) {
-                                current.stackSize += restore;
-                                removed.stackSize -= restore;
-                                inventory.setInventorySlotContents(
-                                        slot,
-                                        current);
-                            }
-                        }
-                    }
+                if (leftover > 0) {
+                    restoreToSource(inventory, slot, removed);
                 }
 
-                int accepted = removedAmount - Math.max(
-                        0,
-                        removed.stackSize);
+                moved += inserted;
+                remaining -= inserted;
 
-                moved += accepted;
-                remaining -= accepted;
-
-                if (accepted == 0) {
-                    return "背包空间不足，已停止取料。"
-                            + "目前已取出 "
-                            + moved
-                            + " 个 "
-                            + selectedName
-                            + "。";
+                if (inserted == 0) {
+                    return "玩家背包没有空间，已停止取料。"
+                            + "目前已取出 " + moved + " 个 " + selectedName + "。";
                 }
             }
         }
 
         if (moved == 0) {
-            return "没有取出任何“"
-                    + selectedName
-                    + "”；可能是玩家背包空间不足。";
+            return "没有取出任何“" + selectedName + "”；玩家背包可能已满。";
         }
 
         if (moved < requested) {
-            return "已从附近容器取出 "
-                    + moved
-                    + " 个 "
-                    + selectedName
-                    + "；请求 "
-                    + requested
+            return "已取出 " + moved + " 个 " + selectedName
+                    + "；请求 " + requested
                     + " 个，但剩余材料或背包空间不足。";
         }
 
-        return "已从附近容器取出 "
-                + moved
-                + " 个 "
-                + selectedName
-                + "，放入玩家背包。";
+        return "已从附近容器取出 " + moved + " 个 "
+                + selectedName + "，放入玩家背包。";
+    }
+
+    private static void restoreToSource(
+            IInventory inventory,
+            int slot,
+            ItemStack leftover) {
+
+        if (leftover == null || leftover.stackSize <= 0) {
+            return;
+        }
+
+        ItemStack current = safeGet(inventory, slot);
+
+        if (current == null) {
+            inventory.setInventorySlotContents(slot, leftover);
+            inventory.markDirty();
+            return;
+        }
+
+        if (current.isItemEqual(leftover)
+                && ItemStack.areItemStackTagsEqual(current, leftover)) {
+
+            int limit = Math.min(
+                    inventory.getInventoryStackLimit(),
+                    current.getMaxStackSize());
+
+            int free = Math.max(0, limit - current.stackSize);
+            int restore = Math.min(free, leftover.stackSize);
+
+            if (restore > 0) {
+                current.stackSize += restore;
+                leftover.stackSize -= restore;
+                inventory.setInventorySlotContents(slot, current);
+                inventory.markDirty();
+            }
+        }
     }
 
     private static List<IInventory> findInventories(EntityPlayer player) {
-        List<IInventory> result =
-                new ArrayList<IInventory>();
+        List<IInventory> result = new ArrayList<IInventory>();
 
         if (player == null || player.worldObj == null) {
             return result;
         }
 
-        int radius = AIConfig.storageRadius;
-        int centerX = (int)Math.floor(player.posX);
-        int centerY = (int)Math.floor(player.posY);
-        int centerZ = (int)Math.floor(player.posZ);
+        int radius = Math.max(1, AIConfig.storageRadius);
+        int centerX = (int) Math.floor(player.posX);
+        int centerY = (int) Math.floor(player.posY);
+        int centerZ = (int) Math.floor(player.posZ);
 
-        for (int x = centerX - radius;
-             x <= centerX + radius;
-             x++) {
-
+        for (int x = centerX - radius; x <= centerX + radius; x++) {
             for (int y = Math.max(0, centerY - radius);
-                 y <= centerY + radius;
-                 y++) {
+                    y <= centerY + radius; y++) {
 
                 for (int z = centerZ - radius;
-                     z <= centerZ + radius;
-                     z++) {
+                        z <= centerZ + radius; z++) {
 
                     TileEntity tile =
                             player.worldObj.getTileEntity(x, y, z);
@@ -364,10 +352,13 @@ public final class StorageContainerTool implements Tool {
                         continue;
                     }
 
-                    result.add((IInventory)tile);
+                    IInventory inventory = (IInventory) tile;
 
-                    if (result.size()
-                            >= AIConfig.storageMaxContainers) {
+                    if (!result.contains(inventory)) {
+                        result.add(inventory);
+                    }
+
+                    if (result.size() >= AIConfig.storageMaxContainers) {
                         return result;
                     }
                 }
@@ -393,13 +384,11 @@ public final class StorageContainerTool implements Tool {
             String query) {
 
         String q = query.trim();
+        String display = stack.getDisplayName();
+        String unlocalized = stack.getUnlocalizedName();
 
-        return q.equalsIgnoreCase(stack.getDisplayName())
-                || q.equalsIgnoreCase(stack.getUnlocalizedName())
-                || q.equalsIgnoreCase(
-                        stack.getUnlocalizedName()
-                                + ":"
-                                + stack.getItemDamage());
+        return q.equalsIgnoreCase(display)
+                || q.equalsIgnoreCase(unlocalized);
     }
 
     private static boolean matchesFuzzy(
@@ -414,25 +403,6 @@ public final class StorageContainerTool implements Tool {
                 && display.toLowerCase().contains(q))
                 || (unlocalized != null
                 && unlocalized.toLowerCase().contains(q));
-    }
-
-    private static boolean sameItem(
-            ItemStack a,
-            ItemStack b) {
-
-        if (a == null || b == null) {
-            return false;
-        }
-
-        if (a.getItem() != b.getItem()) {
-            return false;
-        }
-
-        if (a.getItemDamage() != b.getItemDamage()) {
-            return false;
-        }
-
-        return ItemStack.areItemStackTagsEqual(a, b);
     }
 
     private static String extractString(
@@ -504,14 +474,16 @@ public final class StorageContainerTool implements Tool {
         int start = colon + 1;
 
         while (start < json.length()
-                && Character.isWhitespace(json.charAt(start))) {
+                && Character.isWhitespace(
+                        json.charAt(start))) {
             start++;
         }
 
         int end = start;
 
         while (end < json.length()
-                && Character.isDigit(json.charAt(end))) {
+                && Character.isDigit(
+                        json.charAt(end))) {
             end++;
         }
 
