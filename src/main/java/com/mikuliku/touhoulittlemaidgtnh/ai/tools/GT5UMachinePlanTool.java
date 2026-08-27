@@ -109,19 +109,10 @@ public final class GT5UMachinePlanTool {
 
     /**
      * 根据真实 RecipeMap 创建机器执行计划。
+     *
+     * 不再依赖 GT5URecipeAdapter.RecipeMatch，
+     * 直接使用真实的 RecipeMap 和 GTRecipe。
      */
-    public static MachinePlan createPlan(
-            GT5URecipeAdapter.RecipeMatch match) {
-
-        if (match == null) {
-            return null;
-        }
-
-        return createPlan(
-                match.getRecipeMap(),
-                match.getRecipe());
-    }
-
     public static MachinePlan createPlan(
             RecipeMap<?> map,
             GTRecipe recipe) {
