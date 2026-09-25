@@ -4,6 +4,7 @@ import com.mikuliku.touhoulittlemaidgtnh.ai.tools.CraftExecutorTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.GT5UMachineExecutorTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.GT5UMachineScannerTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.GT5UMachineTransferTool;
+import com.mikuliku.touhoulittlemaidgtnh.ai.tools.GT5URecipePlanTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.MaterialCheckTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.RecipeSearchTool;
 import com.mikuliku.touhoulittlemaidgtnh.ai.tools.StorageContainerTool;
@@ -39,6 +40,7 @@ public final class ToolRegistry {
         register(new StorageContainerTool());
         register(new MaterialCheckTool());
         register(new GT5UMachineScannerTool());
+        register(new GT5URecipePlanTool());
         register(new GT5UMachineTransferTool());
         register(new GT5UMachineExecutorTool());
 
